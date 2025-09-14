@@ -14,12 +14,15 @@ import matplotlib.pyplot as plt
 # =======================
 # 環境変数
 # =======================
-load_dotenv()
+load_dotenv()  # ローカルでは .env を読み込む
 REPLICATE_API_TOKEN = os.getenv("EXTNREPLICATE")
 PIXABAY_API_KEY = os.getenv("TNPIXABAY")
+
 if not REPLICATE_API_TOKEN or not PIXABAY_API_KEY:
-    st.error("EXTNREPLICATEまたは TNPIXABAY が設定されていません")
+    st.error("EXTNREPLICATE または TNPIXABAY が設定されていません")
     st.stop()
+
+st.write("✅ APIトークン読み込み成功")
 
 # =======================
 # 1日10枚まで制限
@@ -59,23 +62,28 @@ def analyze_market(keyword: str):
         return {"keyword": keyword, "trend": "不明", "total_results": 0, "sample_images": []}
 
 # =======================
-# 画像生成
+# 画像生成（Stable Diffusion 2.1）
 # =======================
+MODEL_VERSION = "stability-ai/stable-diffusion:ac732df83cea7fff18b8472768c88ad041fa750ff7682a21affe81863cbe77e4"
+client = replicate.Client(api_token=REPLICATE_API_TOKEN)
+
 def generate_image(prompt: str, width: int = 512, height: int = 512, steps: int = 20, num_outputs: int = 1):
-    model_version = "stability-ai/stable-diffusion:b3d14e1cd1f9470bbb0bb68cac48e5f483e5be309551992cc33dc30654a82bb7"
-    client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-    outputs = client.run(
-        model_version,
-        input={
-            "prompt": prompt,
-            "width": width,
-            "height": height,
-            "num_inference_steps": steps,
-            "num_outputs": num_outputs,
-        },
-    )
-    urls = [f.url if hasattr(f, "url") else f for f in outputs]
-    return urls
+    try:
+        outputs = client.run(
+            MODEL_VERSION,
+            input={
+                "prompt": prompt,
+                "width": width,
+                "height": height,
+                "num_inference_steps": steps,
+                "num_outputs": num_outputs,
+            },
+        )
+        urls = [f.url if hasattr(f, "url") else f for f in outputs]
+        return urls
+    except replicate.exceptions.ReplicateError as e:
+        st.error(f"画像生成失敗: {e}")
+        return []
 
 # =======================
 # 購買分析
@@ -94,7 +102,7 @@ def analyze_buyers(data: str):
     }
 
 # =======================
-# 盗作チェック（pHash + 警告表示）
+# 盗作チェック
 # =======================
 def check_image_similarity(generated_url, reference_urls, threshold=5):
     gen_img = Image.open(BytesIO(requests.get(generated_url).content))
@@ -117,7 +125,6 @@ tabs = st.tabs(["市場分析", "画像生成", "購買分析"])
 # ===== 市場分析 =====
 with tabs[0]:
     st.header("市場分析（Pixabayベース）")
-    st.info("Pixabay APIの検索結果を基に、サンプル画像とヒット数で市場傾向を可視化します。")
     keyword = st.text_input("分析キーワード", "猫")
     if st.button("市場を分析"):
         with st.spinner("市場データを収集中..."):
@@ -127,8 +134,6 @@ with tabs[0]:
                 st.subheader("サンプル画像")
                 for img in market_result["sample_images"]:
                     st.image(img["previewURL"], width=150, caption=img["tags"])
-            # グラフ化
-            st.subheader("市場ヒット数推移（簡易表示）")
             plt.bar([keyword], [market_result["total_results"]])
             st.pyplot(plt.gcf())
             plt.clf()
@@ -136,13 +141,11 @@ with tabs[0]:
 # ===== 画像生成 =====
 with tabs[1]:
     st.header("画像生成（1日10枚まで）")
-    st.info("推奨設定: 幅512px × 高さ512px, ステップ20, 生成枚数1")
-    width = st.number_input("幅 (px, 推奨: 512〜1024)", 128, 1024, 512, 64)
-    height = st.number_input("高さ (px, 推奨: 512〜1024)", 128, 1024, 512, 64)
+    width = st.number_input("幅(px)", 128, 1024, 512, 64)
+    height = st.number_input("高さ(px)", 128, 1024, 512, 64)
     steps = st.slider("ステップ数", 10, 50, 20)
     num_outputs = st.slider("生成枚数", 1, 4, 1)
-    prompt = st.text_area("画像生成プロンプト（日本語可）", "かわいい猫、リアル、自然光、白背景", max_chars=150)
-    negative_prompt = st.text_area("除外する要素（任意）", "blurry, deformed, lowres, bad anatomy")
+    prompt = st.text_area("画像生成プロンプト", "かわいい猫、リアル、自然光、白背景", max_chars=150)
 
     COST_PER_IMAGE = 0.02
     daily_data = load_daily_data()
@@ -160,49 +163,37 @@ with tabs[1]:
         if st.button("画像を生成"):
             actual_generate = min(num_outputs, remaining)
             with st.spinner("画像生成中..."):
-                try:
-                    urls = generate_image(prompt, width=int(width), height=int(height), steps=steps, num_outputs=actual_generate)
-                    st.success(f"{len(urls)}枚の画像を生成しました")
-                    for i, url in enumerate(urls):
-                        st.image(url, caption=f"{prompt} (画像_{i+1})", width=512)
-                        st.markdown(f"[画像_{i+1}_ダウンロード]({url})")
+                urls = generate_image(prompt, width=int(width), height=int(height), steps=steps, num_outputs=actual_generate)
+                st.success(f"{len(urls)}枚生成完了")
+                for i, url in enumerate(urls):
+                    st.image(url, width=512)
+                    st.markdown(f"[ダウンロード]({url})")
 
-                        # 盗作チェック
-                        if 'market_result' in locals():
-                            reference_urls = [img["previewURL"] for img in market_result.get("sample_images", [])]
-                            warnings = check_image_similarity(url, reference_urls)
-                            if warnings:
-                                st.warning(f"画像_{i+1} は既存画像と類似の可能性があります（参考）")
-                                for w in warnings:
-                                    st.image(w["ref_url"], width=150, caption=f"類似度 {w['distance']}")
-                            else:
-                                st.success(f"画像_{i+1} は盗用の可能性なし")
+                    # 盗作チェック
+                    if 'market_result' in locals():
+                        reference_urls = [img["previewURL"] for img in market_result.get("sample_images", [])]
+                        warnings = check_image_similarity(url, reference_urls)
+                        if warnings:
+                            st.warning(f"画像_{i+1} は既存画像と類似の可能性があります")
+                            for w in warnings:
+                                st.image(w["ref_url"], width=150, caption=f"類似度 {w['distance']}")
 
-                    # 使用状況更新
-                    daily_data[today_str]["count"] += len(urls)
-                    daily_data[today_str]["cost"] += len(urls) * COST_PER_IMAGE
-                    save_daily_data(daily_data)
+                daily_data[today_str]["count"] += len(urls)
+                daily_data[today_str]["cost"] += len(urls) * COST_PER_IMAGE
+                save_daily_data(daily_data)
 
-                    remaining = max(0, 10 - daily_data[today_str]["count"])
-                    st.info(f"本日残り生成可能枚数: {remaining} / 10")
-                    st.info(f"本日合計金額: ${daily_data[today_str]['cost']:.2f}")
-
-                except Exception as e:
-                    st.error(f"生成失敗: {e}")
+                remaining = max(0, 10 - daily_data[today_str]["count"])
+                st.info(f"本日残り生成可能枚数: {remaining} / 10")
+                st.info(f"本日合計コスト: ${daily_data[today_str]['cost']:.2f}")
 
 # ===== 購買分析 =====
 with tabs[2]:
     st.header("購買分析")
-    st.info("JSON形式で購買データを入力すると、購買理由を集計しグラフ化します。")
-    sample_data = st.text_area(
-        "購買データ（JSON形式）",
-        '[{"user":"A","item":"art1","reason":"色が良い"}, {"user":"B","item":"art2","reason":"安い"}]'
-    )
+    sample_data = st.text_area("購買データ（JSON形式）", '[{"user":"A","item":"art1","reason":"色が良い"}]')
     if st.button("購買分析を実行"):
         try:
             analysis = analyze_buyers(sample_data)
             st.json(analysis)
-            # 円グラフ表示
             labels = list(analysis["reason_summary"].keys())
             sizes = list(analysis["reason_summary"].values())
             plt.pie(sizes, labels=labels, autopct="%1.1f%%")
@@ -210,4 +201,5 @@ with tabs[2]:
             plt.clf()
         except Exception as e:
             st.error(f"分析失敗: {e}")
+
 
