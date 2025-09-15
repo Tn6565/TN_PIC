@@ -62,7 +62,7 @@ def analyze_market(keyword: str):
 # 画像生成（Replicate）
 # =======================
 def generate_image(prompt: str, width: int = 512, height: int = 512, steps: int = 20, num_outputs: int = 1):
-    model_version = "stability-ai/stable-diffusion:b3d14e1cd1f9470bbb0bb68cac48e5f483e5be309551992cc33dc30654a82bb7"
+    model_version = "stability-ai/stable-diffusion:ac732df83cea7fff18b8472768c88ad041fa750ff7682a21affe81863cbe77e4"
     client = replicate.Client(api_token=REPLICATE_API_TOKEN)
     outputs = client.run(
         model_version,
