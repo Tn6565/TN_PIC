@@ -7,6 +7,15 @@ import os
 from pytrends.request import TrendReq
 
 # ==========================
+# ページ設定（タイトルとアイコン）
+# ==========================
+st.set_page_config(
+    page_title="画像市場調査アプリ",
+    page_icon="icon.ico",  # Windowsアイコンをここに設定
+    layout="centered"
+)
+
+# ==========================
 # APIキーの読み込み
 # ==========================
 PIXABAY_API_KEY = os.getenv("TNPIXABAY")
