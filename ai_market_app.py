@@ -16,6 +16,14 @@ st.set_page_config(
 )
 
 # ==========================
+# 複数サイズファビコンを HTML で設定
+# ==========================
+st.markdown("""
+<link rel="icon" type="image/png" sizes="32x32" href="static/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="128x128" href="static/favicon-128x128.png">
+""", unsafe_allow_html=True)
+
+# ==========================
 # APIキーの読み込み
 # ==========================
 PIXABAY_API_KEY = os.getenv("TNPIXABAY")
