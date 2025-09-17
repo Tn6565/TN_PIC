@@ -6,22 +6,14 @@ import numpy as np
 import os
 from pytrends.request import TrendReq
 
-# ==========================
-# ページ設定（タイトルとアイコン）
+
+# ページ設定（タイトルとファビコン）
 # ==========================
 st.set_page_config(
     page_title="画像市場調査アプリ",
-    page_icon="icon.ico",  # Windowsアイコンをここに設定
+    page_icon="favicon.png",  # ここに128x128 PNGファビコンを指定
     layout="centered"
 )
-
-# ==========================
-# 複数サイズファビコンを HTML で設定
-# ==========================
-st.markdown("""
-<link rel="icon" type="image/png" sizes="32x32" href="static/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="128x128" href="static/favicon-128x128.png">
-""", unsafe_allow_html=True)
 
 # ==========================
 # APIキーの読み込み
